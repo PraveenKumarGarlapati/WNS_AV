@@ -11,6 +11,8 @@ library(readr)
 library(randomForest)
 library(caret)
 library(xgboost)
+library(InformationValue)
+library(dummies)
 
 
 
@@ -35,15 +37,31 @@ viewlog%>%View()
 itemdata%>%View()
 
 
+#Personal PC
+
+viewlog <- view_log
+rm(view_log)
+
+itemdata <- item_data
+rm(item_data)
+
+
+
 # Train Data Manipulations ------------------------------------------------
-
-
 
 train <- train%>%
   group_by(user_id,app_code)%>%
   mutate(freq_user_website = rank(impression_time,ties.method = "first"))
 
 train <- train%>%
+  group_by(user_id)%>%
+  mutate(freq_userlevel = rank(impression_time,ties.method = "first"))
+
+test <- test%>%
+  group_by(user_id,app_code)%>%
+  mutate(freq_user_website = rank(impression_time,ties.method = "first"))
+
+test <- test%>%
   group_by(user_id)%>%
   mutate(freq_userlevel = rank(impression_time,ties.method = "first"))
 
@@ -58,12 +76,21 @@ train <- train%>%
          hour = hour(impression_time),
          mins = minute(impression_time))
 
+test <- test%>%
+  mutate(date = date(impression_time),
+         year = year(impression_time),
+         day = day(impression_time),
+         month = month(impression_time),
+         hour = hour(impression_time),
+         mins = minute(impression_time))
+
+
 train <- train%>%
   ungroup(user_id)
 
-train%>%
-  count(day, month)%>%
-  print(n=100)
+# train%>%
+#   count(day, month)%>%
+#   print(n=100)
 
 train%>%
   count(mins)%>%
@@ -75,6 +102,7 @@ train%>%
 #Check percentage conversion at minute and hour level and add them to
 #train sheet
 
+####
 train%>%
   count(freq_userlevel, is_click)%>%
   filter(is_click == 1)%>%
@@ -87,7 +115,12 @@ train%>%
   mutate(perc_conv = (`1`/ (`1` + `0`)*100))%>%
   ggplot(aes(x = freq_userlevel, y=perc_conv)) + geom_point()
 
+fq_userlevel_perc <- train%>%
+  count(freq_userlevel, is_click)%>%
+  dcast(freq_userlevel ~ is_click, value.var = "n")%>%
+  mutate(perc_conv = (`1`/ (`1` + `0`)*100))
 
+#####
 train%>%
   count(freq_user_website, is_click)%>%
   filter(is_click == 1)%>%
@@ -100,9 +133,14 @@ train%>%
   mutate(perc_conv = (`1`/ (`1` + `0`)*100))%>%
   ggplot(aes(x = freq_user_website, y=perc_conv)) + geom_point()
 
+fq_user_website_perc <- train%>%
+  count(freq_user_website, is_click)%>%
+  dcast(freq_user_website ~ is_click, value.var = "n")%>%
+  mutate(perc_conv = (`1`/ (`1` + `0`)*100))
+
 #Add these perc conversion rates to the train sheet
 
-
+train%>%View()
 
 
 
@@ -124,7 +162,7 @@ viewlog%>%
   summarise(totalviews_givendate = n())
 
 #Total views by a given user of a particular product  
-viewlog%>%
+views_user_item <- viewlog%>%
   group_by(user_id, date, item_id)%>%
   summarise(views = n())%>%
   group_by(user_id)%>%
@@ -139,3 +177,6 @@ viewlog%>%
   summarise(views = n())%>%
   ungroup()%>%
   mutate(rleid(item_id))
+
+
+
