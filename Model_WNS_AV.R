@@ -171,3 +171,83 @@ df%>%
 
 
 
+
+
+
+
+# FinalDay Model ----------------------------------------------------------
+
+train <- train%>%
+  left_join(views2day)
+
+train <- train%>%
+  left_join(allviewstill2day)
+
+train <- train%>%
+  left_join(unqitem2day)
+
+test <- test%>%
+  left_join(views2day)
+
+test <- test%>%
+  left_join(allviewstill2day)
+
+test <- test%>%
+  left_join(unqitem2day)
+
+train_m <- train[, -c(1,2,3,10,11,13)]
+train_m[ ,-c(4,5,6,10,11,12)] <- map(train_m[ ,-c(4,5,6,10,11,12)], as.factor)
+
+test$is_click <- NA
+test_m <- test[, -c(1,2,3,7,8,10)]
+test_m <- test_m%>%
+  select(app_code, os_version, is_4G, is_click, freq_user_website,
+         freq_userlevel,day,hour,mins, views2day,
+         allviewstill2day,unqitem2day)
+test_m[ ,-c(4,5,6,10,11,12)] <- map(test_m[ ,-c(4,5,6,10,11,12)], as.factor)
+
+train_m[is.na(train_m)] <- 0
+
+all <- rbind(train_m, test_m)
+
+all_ohe <- dummy_cols(all, select_columns = c("app_code","os_version","is_4G","day","hour","mins"))
+all_ohe <- all_ohe%>%
+  select(-app_code, -os_version, 
+         -is_4G, -day, -hour, -mins)
+
+all_ohe%>%colnames()
+
+#Breaking down back to train and test
+test_m_ohe <- all_ohe%>%
+  filter(is.na(is_click))
+
+trainm_ohe <- all_ohe%>%
+  filter(!is.na(is_click))
+
+# fwrite(trainm_ohe, "trainmohe_v2.csv")
+# fwrite(test_m_ohe, "testmohe_v2.csv")
+
+trainm_ohe <- fread("trainmohe_v2.csv")
+test_m_ohe <- fread("testmohe_v2.csv")
+
+trainm_ohe <- as.matrix(trainm_ohe)
+test_m_ohe <- as.matrix(test_m_ohe)
+dtrain <- xgb.DMatrix(data = trainm_ohe[ ,-1], label = trainm_ohe[ ,1])
+dtest <- xgb.DMatrix(data = test_m_ohe[ ,-1])
+
+xgb <- xgboost(data = dtrain, 
+                 eta = 0.1,
+                 max_depth = 15, 
+                 nround=25, 
+                 eval_metric = "auc",
+                 objective = "binary:logistic")
+
+xgb_preds <- predict(xgb, dtest)%>%as.data.frame()
+colnames(xgb_preds) <- "is_click"
+
+xgb_sub <- data.frame(sample_submission$impression_id, xgb_preds$is_click)
+colnames(xgb_sub) <- colnames(sample_submission)
+write_csv(xgb_sub, "xgb_sub3.csv")
+
+
+

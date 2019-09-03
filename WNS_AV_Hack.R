@@ -157,9 +157,11 @@ viewlog <- viewlog%>%
          mins = minute(server_time))
 
 #Total Views by a user on a given date
-viewlog%>%
+user_date <- viewlog%>%
   group_by(user_id, date)%>%
   summarise(totalviews_givendate = n())
+
+
 
 #Total views by a given user of a particular product  
 views_user_item <- viewlog%>%
@@ -171,12 +173,53 @@ views_user_item <- viewlog%>%
   group_by(user_id, item_id)%>%
   mutate(cum_views_OnItem = cumsum(views))
 
-#Instead of rleid, use label the data
+#Instead of rleid, use other means to label the data
 viewlog%>%
   group_by(user_id, date, item_id)%>%
   summarise(views = n())%>%
   ungroup()%>%
   mutate(rleid(item_id))
+
+user_date%>%
+  ungroup()%>%
+  group_by(user_id)%>%
+  mutate(cummax(totalviews_givendate))%>%
+  print(n=20)
+
+
+views_user_item <- as.tbl(views_user_item)
+views_user_item <- views_user_item%>%
+  select(-unq, -maxunq)
+
+
+#setDT(views_user_item)[, unq := .GRP, by = item_id][, "unq"]
+#views_user_item <- as.tbl(views_user_item)
+
+# views_user_item <- views_user_item%>%
+#   group_by(user_id)
+#   mutate(maxunq = cummax(unq))
+# 
+# views_user_item%>%print(n=150)
+
+# views_user_item%>%
+#   group_by(user_id, date)%>%
+#   summarise(unqitemstilldte = max(maxunq))%>%
+#   print(n=100)
+
+unqitem2day <- views_user_item%>%
+  select(user_id, date, item_id)%>%
+  count(user_id, date)%>%
+  rename(unqitem2day = n)
+
+views2day <- views_user_item%>%
+  group_by(user_id, date)%>%
+  summarise(views2day = sum(views))
+
+allviewstill2day <- views_user_item%>%
+  group_by(user_id, date)%>%
+  summarise(allviewstill2day = sum(cum_viewsAll))
+
+views_user_item$item_id <- as.factor(views_user_item$item_id)
 
 
 
